@@ -1,4 +1,7 @@
 const pino = require('pino');
+const { AsyncLocalStorage } = require('async_hooks');
+
+const store = new AsyncLocalStorage();
 
 const sensitiveKeys = new Set(['mobileNumber', 'phone', 'email', 'password', 'pin', 'token', 'cardNumber']);
 const sensitiveHeaderKeys = new Set(['authorization', 'cookie']);
@@ -44,7 +47,13 @@ function maskHeaders(headers) {
   return out;
 }
 
-const logger = pino({
+function getCtx() {
+  const ctx = store.getStore();
+  if (!ctx) return {};
+  return { traceId: ctx.traceId };
+}
+
+const base = pino({
   level: process.env.LOG_LEVEL || 'info',
   transport: process.env.NODE_ENV === 'production'
     ? undefined
@@ -54,14 +63,11 @@ const logger = pino({
       },
 });
 
-/**
- * Express logging middleware
- */
 function loggingMiddleware(req, res, next) {
   const start = Date.now();
 
-  logger.info({
-    traceId: req.traceId,
+  base.info({
+    ...getCtx(),
     method: req.method,
     url: req.originalUrl,
     body: maskObject(req.body),
@@ -72,8 +78,8 @@ function loggingMiddleware(req, res, next) {
   }, '📩 Incoming request');
 
   res.on('finish', () => {
-    logger.info({
-      traceId: req.traceId,
+    base.info({
+      ...getCtx(),
       method: req.method,
       url: req.originalUrl,
       statusCode: res.statusCode,
@@ -84,56 +90,37 @@ function loggingMiddleware(req, res, next) {
   next();
 }
 
-/**
- * Logger wrapper that always masks sensitive data and adds traceId
- */
 function withTrace(reqOrTraceId) {
   const traceId = typeof reqOrTraceId === 'string'
     ? reqOrTraceId
     : reqOrTraceId?.traceId;
 
   function normalize(obj, msg) {
-    // If first argument is string → treat as message
-    if (typeof obj === 'string') {
-      return { data: {}, msg: obj };
-    }
-
-    // If only object passed
-    if (obj && !msg) {
-      return { data: obj, msg: undefined };
-    }
-
+    if (typeof obj === 'string') return { data: {}, msg: obj };
+    if (obj && !msg) return { data: obj, msg: undefined };
     return { data: obj || {}, msg };
   }
 
   return {
-    info: (obj, msg) => {
-      const { data, msg: finalMsg } = normalize(obj, msg);
-      logger.info({ traceId, ...maskObject(data) }, finalMsg);
-    },
-
-    warn: (obj, msg) => {
-      const { data, msg: finalMsg } = normalize(obj, msg);
-      logger.warn({ traceId, ...maskObject(data) }, finalMsg);
-    },
-
-    debug: (obj, msg) => {
-      const { data, msg: finalMsg } = normalize(obj, msg);
-      logger.debug({ traceId, ...maskObject(data) }, finalMsg);
-    },
-
-    error: (obj, msg) => {
-      const { data, msg: finalMsg } = normalize(obj, msg);
-      logger.error({ traceId, ...maskObject(data) }, finalMsg);
-    },
+    info:  (obj, msg) => { const { data, msg: m } = normalize(obj, msg); base.info( { traceId, ...maskObject(data) }, m); },
+    warn:  (obj, msg) => { const { data, msg: m } = normalize(obj, msg); base.warn( { traceId, ...maskObject(data) }, m); },
+    debug: (obj, msg) => { const { data, msg: m } = normalize(obj, msg); base.debug({ traceId, ...maskObject(data) }, m); },
+    error: (obj, msg) => { const { data, msg: m } = normalize(obj, msg); base.error({ traceId, ...maskObject(data) }, m); },
   };
 }
 
+const logger = {
+  info:  (data, msg) => base.info( { ...getCtx(), ...maskObject(data) }, msg),
+  warn:  (data, msg) => base.warn( { ...getCtx(), ...maskObject(data) }, msg),
+  error: (data, msg) => base.error({ ...getCtx(), ...maskObject(data) }, msg),
+  debug: (data, msg) => base.debug({ ...getCtx(), ...maskObject(data) }, msg),
 
-logger.maskObject = maskObject;
-logger.maskSensitive = maskSensitive;
-logger.maskHeaders = maskHeaders;
-logger.loggingMiddleware = loggingMiddleware;
-logger.withTrace = withTrace;
+  withTrace,
+  loggingMiddleware,
+  maskObject,
+  maskSensitive,
+  maskHeaders,
+  store,
+};
 
 module.exports = logger;
