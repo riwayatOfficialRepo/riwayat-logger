@@ -114,6 +114,8 @@ const logger = {
   warn:  (data, msg) => base.warn( { ...getCtx(), ...maskObject(data) }, msg),
   error: (data, msg) => base.error({ ...getCtx(), ...maskObject(data) }, msg),
   debug: (data, msg) => base.debug({ ...getCtx(), ...maskObject(data) }, msg),
+  
+  child: (bindings) => base.child(bindings),  // ← add this line
 
   withTrace,
   loggingMiddleware,
