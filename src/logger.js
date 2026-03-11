@@ -109,11 +109,16 @@ function withTrace(reqOrTraceId) {
   };
 }
 
+function log(method, data, msg) {
+  if (typeof data === 'string') return base[method]({ ...getCtx() }, data);
+  base[method]({ ...getCtx(), ...maskObject(data) }, msg);
+}
+
 const logger = {
-  info:  (data, msg) => base.info( { ...getCtx(), ...maskObject(data) }, msg),
-  warn:  (data, msg) => base.warn( { ...getCtx(), ...maskObject(data) }, msg),
-  error: (data, msg) => base.error({ ...getCtx(), ...maskObject(data) }, msg),
-  debug: (data, msg) => base.debug({ ...getCtx(), ...maskObject(data) }, msg),
+  info:  (data, msg) => log('info',  data, msg),
+  warn:  (data, msg) => log('warn',  data, msg),
+  error: (data, msg) => log('error', data, msg),
+  debug: (data, msg) => log('debug', data, msg),
   
   child: (bindings) => base.child(bindings),  // ← add this line
 
