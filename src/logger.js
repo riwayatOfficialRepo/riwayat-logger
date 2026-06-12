@@ -53,14 +53,18 @@ function getCtx() {
   return { traceId: ctx.traceId };
 }
 
+const isProd = process.env.NODE_ENV === 'production';
+
 const base = pino({
   level: process.env.LOG_LEVEL || 'info',
-  transport: process.env.NODE_ENV === 'production'
-    ? undefined
-    : {
-        target: 'pino-pretty',
-        options: { colorize: true, translateTime: 'yyyy-mm-dd HH:MM:ss', ignore: 'pid,hostname' },
-      },
+  transport: {
+    target: 'pino-pretty',
+    options: {
+      colorize: !isProd,
+      translateTime: 'yyyy-mm-dd HH:MM:ss',
+      ignore: 'pid,hostname',
+    },
+  },
 });
 
 function loggingMiddleware(req, res, next) {
@@ -85,6 +89,7 @@ function loggingMiddleware(req, res, next) {
       statusCode: res.statusCode,
       duration_ms: Date.now() - start,
     }, '📤 Response sent');
+    process.stdout.write('\n');
   });
 
   next();
