@@ -3,7 +3,7 @@ const { AsyncLocalStorage } = require('async_hooks');
 
 const store = new AsyncLocalStorage();
 
-const sensitiveKeys = new Set(['mobileNumber', 'phone', 'email', 'password', 'pin', 'token', 'cardNumber']);
+const sensitiveKeys = new Set(['mobileNumber', 'phone', 'email', 'password', 'pin', 'token', 'fcmToken', 'installationId', 'cardNumber']);
 const sensitiveHeaderKeys = new Set(['authorization', 'cookie']);
 
 function maskSensitive(value, visible = 4) {
